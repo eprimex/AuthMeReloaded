@@ -7,6 +7,7 @@ import java.util.Random;
 import java.util.Scanner;
 
 import org.bukkit.Bukkit;
+import org.bukkit.GameMode;
 import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.entity.Player;
@@ -132,10 +133,12 @@ public class Utils {
         	{
         		@Override
         		public void run() {
-        			int current = (int)pl.getLocation().getY();
-        			World currentWorld = pl.getWorld();
-        			if (current != fY && world.getName() == currentWorld.getName()) {
-        				pl.teleport(loc);
+        			if (!PlayerCache.getInstance().isAuthenticated(pl.getName().toLowerCase())) {
+            			int current = (int)pl.getLocation().getY();
+            			World currentWorld = pl.getWorld();
+            			if (current != fY && world.getName() == currentWorld.getName()) {
+            				pl.teleport(loc);
+            			}
         			}
         		}
         	}, 1L, 20L);
@@ -219,6 +222,14 @@ public class Utils {
     	}
     	return new String(arr);
 	}
+
+    /*
+     * Used for force player GameMode
+     */
+    public static void forceGM(Player player) {
+    	if (!AuthMe.getInstance().authmePermissible(player, "authme.bypassforcesurvival"))
+    		player.setGameMode(GameMode.SURVIVAL);
+    }
 
     public enum groupType {
         UNREGISTERED, REGISTERED, NOTLOGGEDIN, LOGGEDIN

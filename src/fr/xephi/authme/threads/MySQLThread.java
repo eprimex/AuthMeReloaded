@@ -285,10 +285,15 @@ public class MySQLThread extends Thread implements DataSource {
                     pst.setInt(1, Settings.getPhpbbGroup);
                     pst.setString(2, auth.getNickname());
                     pst.executeUpdate();
-                    // Apply Register Date
+                    // Get current time without ms
+                    long time = System.currentTimeMillis()/1000;
+                    // Update user_regdate
             		pst = con.prepareStatement("UPDATE " + tableName + " SET " + tableName + ".user_regdate=? WHERE " + columnName + "=?;");
-            		long time = System.currentTimeMillis();
-            		time = Long.parseLong(String.valueOf(time).substring(0, String.valueOf(time).length() - 3));
+                    pst.setLong(1, time);
+                    pst.setString(2, auth.getNickname());
+                    pst.executeUpdate();
+                    // Update user_lastvisit
+            		pst = con.prepareStatement("UPDATE " + tableName + " SET " + tableName + ".user_lastvisit=? WHERE " + columnName + "=?;");
                     pst.setLong(1, time);
                     pst.setString(2, auth.getNickname());
                     pst.executeUpdate();
@@ -471,6 +476,9 @@ public class MySQLThread extends Thread implements DataSource {
             while (rs.next()) {
             	list.add(rs.getString(columnName));
             }
+            pst = con.prepareStatement("DELETE FROM " + tableName + " WHERE " + columnLastLogin + "<?;");
+            pst.setLong(1, until);
+            pst.executeUpdate();
             return list;
         } catch (SQLException ex) {
             ConsoleLogger.showError(ex.getMessage());

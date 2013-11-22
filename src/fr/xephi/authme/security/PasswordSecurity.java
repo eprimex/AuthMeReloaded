@@ -140,8 +140,9 @@ public class PasswordSecurity {
     private static boolean compareWithAllEncryptionMethod(String password, String hash, String playerName) throws NoSuchAlgorithmException {
     	for (HashAlgorithm algo : HashAlgorithm.values()) {
     		try {
+    			EncryptionMethod method = (EncryptionMethod) algo.getclass().newInstance();
     			if (algo != HashAlgorithm.CUSTOM)
-    				if (((EncryptionMethod) algo.getclass().newInstance()).comparePassword(hash, password, playerName)) {
+    				if (method.comparePassword(hash, password, playerName)) {
     					PlayerAuth nAuth = AuthMe.getInstance().database.getAuth(playerName);
     					if (nAuth != null) {
     						nAuth.setHash(getHash(Settings.getPasswordHash, password, playerName));
@@ -151,9 +152,7 @@ public class PasswordSecurity {
     					}
     					return true;
     				}
-			} catch (InstantiationException e) {
-			} catch (IllegalAccessException e) {
-			}
+			} catch (Exception e) {}
     	}
     	return false;
     }

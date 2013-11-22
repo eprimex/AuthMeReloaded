@@ -168,4 +168,12 @@ public class API {
     	} catch (NullPointerException npe) {}
     	return nickname;
     }
+
+    /**
+     * Force a player to login
+     * @param Player player
+     */
+    public static void forceLogin(Player player) {
+    	instance.management.performLogin(player, "dontneed", false, true);
+    }
 }

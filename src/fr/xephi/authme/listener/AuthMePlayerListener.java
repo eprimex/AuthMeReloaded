@@ -66,12 +66,14 @@ public class AuthMePlayerListener implements Listener {
 
     public static int gm = 0;
     public static HashMap<String, Integer> gameMode = new HashMap<String, Integer>();
+    public static HashMap<String, String> joinMessage = new HashMap<String, String>();
 	private Utils utils = Utils.getInstance();
     private Messages m = Messages.getInstance();
     public AuthMe plugin;
     private DataSource data;
     private FileCache playerBackup = new FileCache();
     public boolean causeByAuthMe = false;
+    private HashMap<String, PlayerLoginEvent> antibot = new HashMap<String, PlayerLoginEvent>();
 
     public AuthMePlayerListener(AuthMe plugin, DataSource data) {
         this.plugin = plugin;
@@ -386,6 +388,21 @@ public class AuthMePlayerListener implements Listener {
             return;
         }
 
+        if (Settings.enableProtection && !Settings.countries.isEmpty()) {
+        	String code = plugin.getCountryCode(event.getAddress());
+        	if ((code == null) || (!Settings.countries.contains(code) && !API.isRegistered(name))) {
+        		event.disallow(PlayerLoginEvent.Result.KICK_OTHER, "Your country is banned from this server");
+        		return;
+        	}
+        }
+
+        if (Settings.isKickNonRegisteredEnabled) {
+            if (!data.isAuthAvailable(name)) {    
+                event.disallow(PlayerLoginEvent.Result.KICK_OTHER, m._("reg_only"));
+                return;
+            }
+        }
+
         if (player.isOnline() && Settings.isForceSingleSessionEnabled) {
         	event.disallow(PlayerLoginEvent.Result.KICK_OTHER, m._("same_nick"));
             return;
@@ -444,11 +461,9 @@ public class AuthMePlayerListener implements Listener {
             return;
         }
 
-        if (Settings.isKickNonRegisteredEnabled) {
-            if (!data.isAuthAvailable(name)) {    
-                event.disallow(PlayerLoginEvent.Result.KICK_OTHER, m._("reg_only"));
-                return;
-            }
+        if (event.getResult() == PlayerLoginEvent.Result.ALLOWED) {
+        	checkAntiBotMod(event);
+        	return;
         }
         if (event.getResult() != PlayerLoginEvent.Result.KICK_FULL) return;
         if (player.isBanned()) return;
@@ -469,8 +484,36 @@ public class AuthMePlayerListener implements Listener {
         	} else {
         		ConsoleLogger.info("The player " + player.getName() + " wants to join, but the server is full");
         		event.disallow(Result.KICK_FULL, m._("kick_fullserver"));
+        		return;
         	}
         }
+    }
+
+    private void checkAntiBotMod(final PlayerLoginEvent event) {
+    	if (plugin.delayedAntiBot || plugin.antibotMod)
+    		return;
+    	if (antibot.keySet().size() > Settings.antiBotSensibility) {
+    		plugin.switchAntiBotMod(true);
+    		Bukkit.broadcastMessage("[AuthMe] AntiBotMod automatically enabled due to massive connections! ");
+    		Bukkit.getScheduler().scheduleSyncDelayedTask(plugin, new Runnable(){
+				@Override
+				public void run() {
+					if (plugin.antibotMod) {
+						plugin.switchAntiBotMod(false);
+						antibot.clear();
+						Bukkit.broadcastMessage("[AuthMe] AntiBotMod automatically disabled after " + Settings.antiBotDuration + " Minutes, hope invasion stopped ");
+					}
+				}
+    		}, Settings.antiBotDuration * 1200);
+    		return;
+    	}
+    	antibot.put(event.getPlayer().getName().toLowerCase(), event);
+    	Bukkit.getScheduler().scheduleSyncDelayedTask(plugin, new Runnable(){
+			@Override
+			public void run() {
+				antibot.remove(event.getPlayer().getName().toLowerCase());
+			}
+    	}, 300);
     }
 
     @EventHandler(priority = EventPriority.LOWEST)
@@ -490,12 +533,7 @@ public class AuthMePlayerListener implements Listener {
                 out.writeUTF("IP");
             } catch (IOException e) {
             }
-            Bukkit.getServer().getScheduler().scheduleSyncDelayedTask(plugin, new Runnable() {
-                @Override
-                public void run() {
-                    player.sendPluginMessage(plugin, "BungeeCord", b.toByteArray());
-                }
-            });
+            player.sendPluginMessage(plugin, "BungeeCord", b.toByteArray());
         }
     }
 
@@ -512,14 +550,16 @@ public class AuthMePlayerListener implements Listener {
         final String name = player.getName().toLowerCase();
         gameMode.put(name, gm);
         BukkitScheduler sched = plugin.getServer().getScheduler();
-        final PlayerJoinEvent e = event;
 
         if (plugin.getCitizensCommunicator().isNPC(player, plugin) || Utils.getInstance().isUnrestricted(player) || CombatTagComunicator.isNPC(player)) {
             return;
         }
 
-        if (plugin.ess != null && Settings.disableSocialSpy)
-        	plugin.ess.getUser(player.getName()).setSocialSpyEnabled(false);
+        if (plugin.ess != null && Settings.disableSocialSpy) {
+        	try {
+        		plugin.ess.getUser(player.getName()).setSocialSpyEnabled(false);
+        	} catch (Exception e) {}
+        }
 
         String ip = player.getAddress().getAddress().getHostAddress();
         if (Settings.bungee) {
@@ -562,7 +602,7 @@ public class AuthMePlayerListener implements Listener {
                      } else if (auth.getNickname().equalsIgnoreCase(name)){
                          if (Settings.isForceSurvivalModeEnabled && !Settings.forceOnlyAfterLogin) {
                         	 this.causeByAuthMe = true;
-                        	 e.getPlayer().setGameMode(GameMode.SURVIVAL);
+                        	 Utils.forceGM(player);
                         	 this.causeByAuthMe = false;
                          }
                 		 //Player change his IP between 2 relog-in
@@ -585,7 +625,7 @@ public class AuthMePlayerListener implements Listener {
           // isent in session or session was ended correctly
             if (Settings.isForceSurvivalModeEnabled && !Settings.forceOnlyAfterLogin) {
             	this.causeByAuthMe = true;
-            	e.getPlayer().setGameMode(GameMode.SURVIVAL);
+            	Utils.forceGM(player);
             	this.causeByAuthMe = false;
             }
             if (Settings.isTeleportToSpawnEnabled || (Settings.isForceSpawnLocOnJoinEnabled  && Settings.getForcedWorlds.contains(player.getWorld().getName()))) {
@@ -605,7 +645,7 @@ public class AuthMePlayerListener implements Listener {
         } else {
             if (Settings.isForceSurvivalModeEnabled && !Settings.forceOnlyAfterLogin) {
             	this.causeByAuthMe = true;
-            	e.getPlayer().setGameMode(GameMode.SURVIVAL);
+            	Utils.forceGM(player);
             	this.causeByAuthMe = false;
             }
             if(!Settings.unRegisteredGroup.isEmpty()){
@@ -656,6 +696,10 @@ public class AuthMePlayerListener implements Listener {
         player.setNoDamageTicks(Settings.getRegistrationTimeout * 20);
         if (Settings.useEssentialsMotd)
         	player.performCommand("motd");
+        
+        // Remove the join message while the player isn't logging in
+        joinMessage.put(name, event.getJoinMessage());
+        event.setJoinMessage(null);
     }
 
 	private void placePlayerSafely(Player player, Location spawnLoc) {
@@ -1067,8 +1111,14 @@ public class AuthMePlayerListener implements Listener {
     		return;
         if (event.getPlayer() == null || event == null)
             return;
+        if (!Settings.isForceSurvivalModeEnabled)
+        	return;
 
         Player player = event.getPlayer();
+        
+        if (plugin.authmePermissible(player, "authme.bypassforcesurvival"))
+        	return;
+
         String name = player.getName().toLowerCase();
 
         if (Utils.getInstance().isUnrestricted(player) || CombatTagComunicator.isNPC(player))

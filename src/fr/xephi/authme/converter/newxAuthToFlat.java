@@ -10,31 +10,34 @@ import java.util.List;
 
 import org.bukkit.command.CommandSender;
 
-import com.cypherx.xauth.xAuth;
-import com.cypherx.xauth.database.Table;
-import com.cypherx.xauth.utils.xAuthLog;
+import de.luricos.bukkit.xAuth.xAuth;
+import de.luricos.bukkit.xAuth.database.Table;
+import de.luricos.bukkit.xAuth.utils.xAuthLog;
 
 import fr.xephi.authme.AuthMe;
 import fr.xephi.authme.api.API;
 import fr.xephi.authme.cache.auth.PlayerAuth;
 import fr.xephi.authme.datasource.DataSource;
 
-
-/**
-*
-* @author Xephi59
-*/
-public class xAuthToFlat {
+public class newxAuthToFlat extends Thread {
 
 	public AuthMe instance;
 	public DataSource database;
+	public CommandSender sender;
 
-	public xAuthToFlat(AuthMe instance, DataSource database) {
+	public newxAuthToFlat(AuthMe instance, DataSource database, CommandSender sender) {
 		this.instance = instance;
 		this.database = database;
+		this.sender = sender;
+	}
+	
+	public void run() {
+		convert();
+		if (isAlive())
+			interrupt();
 	}
 
-	public boolean convert(CommandSender sender) {
+	public boolean convert() {
 		if (instance.getServer().getPluginManager().getPlugin("xAuth") == null) {
 			sender.sendMessage("[AuthMe] xAuth plugin not found");
 			return false;
@@ -48,15 +51,19 @@ public class xAuthToFlat {
 			return false;
 		}
 		sender.sendMessage("[AuthMe] Starting import...");
-		for (int id : players) {
-			String pl = getIdPlayer(id);
-			String psw = getPassword(id);
-			if (psw != null && !psw.isEmpty() && pl != null) {
-				PlayerAuth auth = new PlayerAuth(pl, psw, "198.18.0.1", 0, "your@email.com", API.getPlayerRealName(pl));
-				database.saveAuth(auth);
+		try {
+			for (int id : players) {
+				String pl = getIdPlayer(id);
+				String psw = getPassword(id);
+				if (psw != null && !psw.isEmpty() && pl != null) {
+					PlayerAuth auth = new PlayerAuth(pl, psw, "198.18.0.1", 0, "your@email.com", API.getPlayerRealName(pl));
+					database.saveAuth(auth);
+				}
 			}
+			sender.sendMessage("[AuthMe] Successfull convert from xAuth database");
+		} catch (Exception e) {
+			sender.sendMessage("[AuthMe] An error has been thrown while import xAuth database, the import hadn't fail but can be not complete ");
 		}
-		sender.sendMessage("[AuthMe] Import done!");
 		return true;
 	}
 

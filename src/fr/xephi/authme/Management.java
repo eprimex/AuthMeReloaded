@@ -50,12 +50,12 @@ public class Management {
         this.pm = plugin.getServer().getPluginManager();
     }
 
-    public void performLogin(final Player player, final String password, final boolean passpartu) {
+    public void performLogin(final Player player, final String password, final boolean passpartu, final boolean forceLogin) {
         if (passpartu) {
             // Passpartu-Login Bypasses Password-Authentication.
             Bukkit.getScheduler().runTaskAsynchronously(plugin, new AsyncronousPasspartuLogin(player));
         } else {
-            Bukkit.getScheduler().runTaskAsynchronously(plugin, new AsyncronousLogin(player, password));
+            Bukkit.getScheduler().runTaskAsynchronously(plugin, new AsyncronousLogin(player, password, forceLogin));
         }
     }
 
@@ -64,12 +64,14 @@ public class Management {
         protected String name;
         protected String password;
         protected String realName;
+        protected boolean forceLogin;
 
-        public AsyncronousLogin(Player player, String password) {
+        public AsyncronousLogin(Player player, String password, boolean forceLogin) {
             this.player = player;
             this.password = password;
             name = player.getName().toLowerCase();
             realName = player.getName();
+            this.forceLogin = forceLogin;
         }
 
         protected String getIP() {
@@ -89,12 +91,11 @@ public class Management {
                     plugin.captcha.remove(name);
                     plugin.captcha.put(name, i);
                 }
-                if (plugin.captcha.containsKey(name) && plugin.captcha.get(name) > Settings.maxLoginTry) {
-                    player.sendMessage(m._("need_captcha"));
+                if (plugin.captcha.containsKey(name) && plugin.captcha.get(name) >= Settings.maxLoginTry) {
                     plugin.cap.put(name, rdm.nextString());
-                    player.sendMessage("Type : /captcha " + plugin.cap.get(name));
+                    player.sendMessage(m._("need_captcha").replace("THE_CAPTCHA", plugin.cap.get(name)).replace("<theCaptcha>", plugin.cap.get(name)));
                     return true;
-                } else if (plugin.captcha.containsKey(name) && plugin.captcha.get(name) > Settings.maxLoginTry) {
+                } else if (plugin.captcha.containsKey(name) && plugin.captcha.get(name) >= Settings.maxLoginTry) {
                     try {
                         plugin.captcha.remove(name);
                         plugin.cap.remove(name);
@@ -138,13 +139,14 @@ public class Management {
             String hash = pAuth.getHash();
             String email = pAuth.getEmail();
             boolean passwordVerified = true;
-            try {
-                passwordVerified = PasswordSecurity.comparePasswordWithHash(password, hash, name);
-            } catch (Exception ex) {
-                ConsoleLogger.showError(ex.getMessage());
-                player.sendMessage(m._("error"));
-                return;
-            }
+            if (!forceLogin)
+            	try {
+            		passwordVerified = PasswordSecurity.comparePasswordWithHash(password, hash, name);
+            	} catch (Exception ex) {
+            		ConsoleLogger.showError(ex.getMessage());
+            		player.sendMessage(m._("error"));
+            		return;
+            	}
             if (passwordVerified && player.isOnline()) {
                 PlayerAuth auth = new PlayerAuth(name, hash, getIP(), new Date().getTime(), email, realName);
                 database.updateSession(auth);
@@ -220,7 +222,7 @@ public class Management {
 
     class AsyncronousPasspartuLogin extends AsyncronousLogin implements Runnable {
         public AsyncronousPasspartuLogin(Player player) {
-            super(player, null);
+            super(player, null, false);
         }
 
         @Override
@@ -388,7 +390,7 @@ public class Management {
                 
                 // Re-Force Survival GameMode if we need due to world change specification
                 if (Settings.isForceSurvivalModeEnabled)
-                	player.setGameMode(GameMode.SURVIVAL);
+                	Utils.forceGM(player);
                 
                 // Cleanup no longer used temporary data
                 LimboCache.getInstance().deleteLimboPlayer(name);
@@ -396,6 +398,14 @@ public class Management {
                     playerCache.removeCache(name);
                 }
             }
+            
+            // We can now display the join message
+            if (AuthMePlayerListener.joinMessage.containsKey(name)) {
+            	for (Player p : Bukkit.getServer().getOnlinePlayers()) {
+            		p.sendMessage(AuthMePlayerListener.joinMessage.get(name));
+            	}
+            }
+            
             // The Loginevent now fires (as intended) after everything is processed
             Bukkit.getServer().getPluginManager().callEvent(new LoginEvent(player, true));
             player.saveData();

@@ -254,6 +254,18 @@ public class MySQLDataSource implements DataSource {
                     pst.setInt(1, Settings.getPhpbbGroup);
                     pst.setString(2, auth.getNickname());
                     pst.executeUpdate();
+                    // Get current time without ms
+                    long time = System.currentTimeMillis()/1000;
+                    // Update user_regdate
+            		pst = con.prepareStatement("UPDATE " + tableName + " SET " + tableName + ".user_regdate=? WHERE " + columnName + "=?;");
+                    pst.setLong(1, time);
+                    pst.setString(2, auth.getNickname());
+                    pst.executeUpdate();
+                    // Update user_lastvisit
+            		pst = con.prepareStatement("UPDATE " + tableName + " SET " + tableName + ".user_lastvisit=? WHERE " + columnName + "=?;");
+                    pst.setLong(1, time);
+                    pst.setString(2, auth.getNickname());
+                    pst.executeUpdate();
                 }
             }
             if (Settings.getPasswordHash == HashAlgorithm.WORDPRESS) {
@@ -433,6 +445,9 @@ public class MySQLDataSource implements DataSource {
             while (rs.next()) {
             	list.add(rs.getString(columnName));
             }
+            pst = con.prepareStatement("DELETE FROM " + tableName + " WHERE " + columnLastLogin + "<?;");
+            pst.setLong(1, until);
+            pst.executeUpdate();
             return list;
         } catch (SQLException ex) {
             ConsoleLogger.showError(ex.getMessage());
